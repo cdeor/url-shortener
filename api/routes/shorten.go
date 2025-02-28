@@ -12,6 +12,7 @@ import (
 	"github.com/cdeor/url-shortener/api/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
 )
 
 func ShortenURL(c *gin.Context) {
@@ -55,6 +56,63 @@ func ShortenURL(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "Different url received!",
 		})
+		return
 	}
+
+	body.URL = utils.EnsureHTTP(body.URL)
+
+	var id string
+
+	if body.CustomURL == "" {
+		id = uuid.New().String()[:6]
+	} else {
+		id = body.CustomURL
+	}
+
+	r := database.CreateClient(0)
+	defer r.Close()
+
+	val, _ = r.Get(database.Ctx, id).Result()
+
+	if val != "" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "URL Custom short already exists",
+		})
+		return
+	}
+
+	if body.Expiry == 0 {
+		body.Expiry = 24
+	}
+
+	err = r.Set(database.Ctx, id, body.URL, body.Expiry*3600*time.Second).Err()
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Unable to connect to redis server",
+		})
+		return
+	}
+
+	resp := models.Response{
+		Expiry:          body.Expiry,
+		XRateLimitReset: 30,
+		XRateRemaining:  10,
+		URL:             body.URL,
+		CustomURL:       "",
+	}
+
+	r2.Decr(database.Ctx, c.ClientIP())
+
+	val, _ = r2.Get(database.Ctx, c.ClientIP()).Result()
+
+	resp.XRateRemaining, _ = strconv.Atoi(val)
+
+	ttl, _ := r2.TTL(database.Ctx, c.ClientIP()).Result()
+	resp.XRateLimitReset = ttl / time.Nanosecond / time.Minute
+
+	resp.CustomURL = os.Getenv("DOMAIN") + "/" + id
+
+	c.JSON(http.StatusOK, resp)
 
 }
