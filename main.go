@@ -8,7 +8,6 @@ import (
 	"github.com/cdeor/url-shortener/api/routes"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"google.golang.org/genproto/googleapis/maps/routes/v1"
 )
 
 func main() {
@@ -33,4 +32,8 @@ func main() {
 func setupRouters(router *gin.Engine) {
 	router.POST("/api/v1", routes.ShortenURL)
 	router.GET("/api/v1/:shortID", routes.GetByShortID)
+	router.DELETE("/api/v1/:shortID", routes.DeleteURL)
+	router.PUT("/api/v1/:shortID", routes.EditURL)
+	router.POST("/api/v1/addTag", routes.AddTAG)
+
 }
