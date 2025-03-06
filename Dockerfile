@@ -1,1 +1,3 @@
-FROM golang:alpine
+FROM golang:alpine 
+
+WORKDIR /the/workdir/path
